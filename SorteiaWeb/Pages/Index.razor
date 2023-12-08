@@ -1,0 +1,185 @@
+﻿@page "/"
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" class="mt-2 mb-4" Text="Add New Participant" Click="@InsertRow" Disabled=@(personToInsert != null || personToUpdate != null)/>
+<RadzenButton ButtonStyle="ButtonStyle.Warning" Icon="add_circle_outline" class="mt-2 mb-4" Text="Draw" Click="@SendWhats"/>
+
+<RadzenDataGrid @ref="personsGrid" AllowAlternatingRows="false" AllowFiltering="true" AllowPaging="true" PageSize="5" AllowSorting="true" EditMode="DataGridEditMode.Single"
+                Data="@persons" TItem="Person" RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" ColumnWidth="200px">
+    <Columns>
+        <RadzenDataGridColumn TItem="Person" Property="Id" Title="Number Participant" Width="120px" Frozen="true"/>
+        <RadzenDataGridColumn TItem="Person" Property="Person.Name" Title="Stage" Width="220px">
+            <Template Context="Person">
+                @Person.Name
+            </Template>
+            <EditTemplate Context="persons">
+                <RadzenTextBox @bind-Value="persons.Name" Style="width:200px; display: block" Name="Name"/>
+                <RadzenRequiredValidator Text="Name is required" Component="Name" Popup="true"/>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Person" Property="Person.TellNumber" Title="Cellphone" Width="220px">
+            <Template Context="persons">
+                @persons.TellNumber
+            </Template>
+            <EditTemplate Context="persons">
+                <RadzenTextBox @bind-Value="persons.TellNumber" Style="width:200px; display: block" Name="TellNumber"/>
+                <RadzenRequiredValidator Text="TellNumber is required" Component="TellNumber" Popup="true"/>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Person" Property="Person.Wish" Title="Wish" Width="220px">
+            <Template Context="persons">
+                @persons.Wish
+            </Template>
+            <EditTemplate Context="persons">
+                <RadzenTextBox @bind-Value="persons.Wish" Style="width:200px; display: block" Name="Wish"/>
+                <RadzenRequiredValidator Text="Wish is required" Component="Wish" Popup="true"/>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="Person" Context="person" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Frozen="true" FrozenPosition="FrozenColumnPosition.Right">
+            <Template Context="person">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(person))" @onclick:stopPropagation="true">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(person))" @onclick:stopPropagation="true">
+                </RadzenButton>
+            </Template>
+            <EditTemplate Context="person">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(person))">
+                </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(person))">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(person))">
+                </RadzenButton>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code{
+    RadzenDataGrid<Person> personsGrid;
+    Person personToInsert;
+    Person personToUpdate;
+
+    List<Person> persons;
+
+    Random random = new Random();
+
+    string accountSid = "ACf5aef120daa497972f3e8489d85886ad";
+    string authToken = "e035235bda968419210000091d8236c5";
+
+    public class Person
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string TellNumber { get; set; }
+        public string Wish { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        persons = new List<Person>();
+    }
+
+    async Task EditRow(Person Person)
+    {
+        personToUpdate = Person;
+        await personsGrid.EditRow(Person);
+    }
+
+    void OnUpdateRow(Person Person)
+    {
+        Reset();
+    }
+
+    async Task SaveRow(Person Person)
+    {
+        await personsGrid.UpdateRow(Person);
+    }
+    async Task SendWhats()
+    {
+        var retorno = true;
+
+        
+        var secretsFriends = SortearAmigoSecreto(persons);
+
+        foreach (var participant in secretsFriends)
+        {
+            var amigoSecreto = participant.Value;
+            var participante = participant.Key;
+            TwilioClient.Init(accountSid, authToken);
+
+            var messageOptions = new CreateMessageOptions(
+                new PhoneNumber($"whatsapp:{participant.Key.TellNumber}"));
+            messageOptions.From = new PhoneNumber("whatsapp:+14155238886");
+            messageOptions.Body = $"Olá {participant.Key.Name}! Para o Amigo Chocolate você tirou o(a) {participant.Value.Name}, uma dica o seu amigo(a) curte {participant.Value.Wish}. <3";
+
+
+           await MessageResource.CreateAsync(messageOptions);
+        } 
+    }
+
+    public static Dictionary<Person, Person> SortearAmigoSecreto(List<Person> participants)
+    {
+        List<Person> amigosSecretos = new List<Person>(participants);
+        Random random = new Random();
+        Dictionary<Person, Person> sorteio = new Dictionary<Person, Person>();
+
+        foreach (Person participant in participants)
+        {
+            Person amigoSecreto = null;
+
+            do
+            {
+                int index = random.Next(amigosSecretos.Count);
+                amigoSecreto = amigosSecretos[index];
+            } while (amigoSecreto.Id == participant.Id);
+
+            sorteio[participant] = amigoSecreto;
+            amigosSecretos.Remove(amigoSecreto);
+        }
+
+        return sorteio;
+    }
+
+    void CancelEdit(Person Person)
+    {
+        Reset();
+
+        personsGrid.CancelEditRow(Person);
+
+    // var PersonEntry = dbContext.Entry(Person);
+    // if (PersonEntry.State == EntityState.Modified)
+    // {
+    //     PersonEntry.CurrentValues.SetValues(PersonEntry.OriginalValues);
+    //     PersonEntry.State = EntityState.Unchanged;
+    // }
+    }
+
+    async Task DeleteRow(Person Person)
+    {
+        Reset();
+    }
+
+    void Reset()
+    {
+        personToInsert = null;
+        personToUpdate = null;
+    }
+
+
+    async Task InsertRow()
+    {
+        personToInsert = new Person() { Id = random.Next(1, 3213213) };
+        await personsGrid.InsertRow(personToInsert);
+        persons.Add(personToInsert);
+    }
+
+    void OnCreateRow(Person person)
+    {
+    // dbContext.Add(Person);
+
+    // dbContext.SaveChanges();
+        personToInsert = null;
+    }
+
+}
